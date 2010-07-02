@@ -34,6 +34,51 @@ PERFDATATEMPL = 'DATATYPE::SERVICEPERFDATA\tTIMET::%(timet)s\tHOSTNAME::%(host_n
 
 ##############################################################################
 
+def daemonize(pidfile=None, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
+	# 1st fork
+	try:
+		pid = os.fork()
+		if pid > 0:
+			sys.exit(0)
+	except OSError, e:
+		sys.stderr.write("1st fork failed: (%d) %s\n" % (e.errno, e.strerror))
+		sys.exit(1)
+	# Prepare 2nd fork
+	os.chdir("/")
+	os.umask(0)
+	os.setsid( )
+	# 2nd fork
+	try:
+		pid = os.fork()
+		if pid > 0:
+			sys.exit(0)
+	except OSError, e:
+		sys.stderr.write("2nd fork failed: (%d) %s\n" % (e.errno, e.strerror))
+		sys.exit(1)
+
+	# Try to write PID file
+	if pidfile:
+		pid = str(os.getpid())
+		try:
+			file(pidfile, 'w+').write('%s\n' % pid)
+		except IOError:
+			sys.stderr.write("Could not write PID file, exiting...\n")
+			sys.exit(1)
+
+	# Redirect stdin, stdout, stderr
+	sys.stdout.flush()
+	sys.stderr.flush()
+	si = file(stdin, 'r')
+	so = file(stdout, 'a+')
+	se = file(stderr, 'a+', 0)
+	os.dup2(si.fileno(), sys.stdin.fileno())
+	os.dup2(so.fileno(), sys.stdout.fileno())
+	os.dup2(se.fileno(), sys.stderr.fileno())
+
+	return
+
+##############################################################################
+
 def normalize_snmp_version(version):
 	if version in [1,'1']:
 		return 1
@@ -73,6 +118,11 @@ def read_config_global(config):
 		cfg['write_internal_perfdata'] = config.getboolean('global','write_internal_perfdata')
 	else:
 		cfg['write_internal_perfdata'] = True
+
+	if config.has_option('global','pidfile'):
+		cfg['pidfile'] = config.get('global','pidfile')
+	else:
+		cfg['pidfile'] = '/var/run/rt4pnp.pid'
 
 	return cfg
 
@@ -196,7 +246,7 @@ def main():
 
 	# Daemonize
 	if options.daemon:
-		print 'FIXME: Not daemonizing ATM...'
+		daemonize(pidfile=globalcfg['pidfile'])
 
 	# Scheduler
 	while True:
