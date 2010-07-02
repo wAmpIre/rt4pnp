@@ -21,12 +21,16 @@
 #####################################################################
 
 import ConfigParser
-import netsnmp
 import optparse
 import os
 import re
 import sys
 import time
+
+try:
+	import netsnmp
+except ImportError:
+	pass
 
 ##############################################################################
 
