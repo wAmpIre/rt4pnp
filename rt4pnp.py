@@ -32,6 +32,8 @@ import time
 
 PERFDATATEMPL = 'DATATYPE::SERVICEPERFDATA\tTIMET::%(timet)s\tHOSTNAME::%(host_name)s\tSERVICEDESC::%(service_desc)s\tSERVICEPERFDATA::%(service_perfdata)s\tSERVICECHECKCOMMAND::%(service_checkcommand)s\tHOSTSTATE::UP\tHOSTSTATETYPE::HARD\tSERVICESTATE::OK\tSERVICESTATETYPE::HARD'
 
+CMDLINE_walk = '/usr/bin/snmpwalk -v%s -c%s -OqevtU %s %s 2>/dev/null'
+
 ##############################################################################
 
 def daemonize(pidfile=None, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
@@ -158,22 +160,44 @@ def read_config_sections(config, sections, globalcfg):
 	return hosts
 
 
-def snmp_get_idx(host):
-	return netsnmp.snmpwalk('.1.3.6.1.2.1.2.2.1.1', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])
+def SNMPWALK_netsnmp(oid, version, address, snmp_community):
+	return netsnmp.snmpwalk(oid, Version=version, DestHost=address, Community=snmp_community)
 
 
-def snmp_get_data(host):
+def SNMPWALK_cmdline(oid, version, address, snmp_community):
+	if version == 2:
+		version = '2c'
+	cmdline = CMDLINE_walk % (version, snmp_community, address, oid)
+
+	cmd = os.popen(cmdline)
+
+	out = cmd.readlines()
+	retcode = cmd.close()
+
+	if retcode != None:
+		return ()
+
+	for line in range(0,len(out)):
+		out[line] = out[line].rstrip().replace('"','')
+	return out
+
+
+def snmp_get_idx(SNMPWALK, host):
+	return SNMPWALK('.1.3.6.1.2.1.2.2.1.1', host['snmp_version'], host['address'], host['snmp_community'])
+
+
+def snmp_get_data(SNMPWALK, host):
 	if host['snmp_version'] == 1:
 
-		nics_name = netsnmp.snmpwalk('.1.3.6.1.2.1.2.2.1.2', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])
-		nics_byin = netsnmp.snmpwalk('.1.3.6.1.2.1.2.2.1.10', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])
-		nics_byout = netsnmp.snmpwalk('.1.3.6.1.2.1.2.2.1.16', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])
+		nics_name = SNMPWALK('.1.3.6.1.2.1.2.2.1.2', host['snmp_version'], host['address'], host['snmp_community'])
+		nics_byin = SNMPWALK('.1.3.6.1.2.1.2.2.1.10', host['snmp_version'], host['address'], host['snmp_community'])
+		nics_byout = SNMPWALK('.1.3.6.1.2.1.2.2.1.16', host['snmp_version'], host['address'], host['snmp_community'])
 
 	elif host['snmp_version'] == 2:
 
-		nics_name = netsnmp.snmpwalk('.1.3.6.1.2.1.31.1.1.1.1', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])
-		nics_byin = netsnmp.snmpwalk('.1.3.6.1.2.1.31.1.1.1.6', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])
-		nics_byout = netsnmp.snmpwalk('.1.3.6.1.2.1.31.1.1.1.10', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])
+		nics_name = SNMPWALK('.1.3.6.1.2.1.31.1.1.1.1', host['snmp_version'], host['address'], host['snmp_community'])
+		nics_byin = SNMPWALK('.1.3.6.1.2.1.31.1.1.1.6', host['snmp_version'], host['address'], host['snmp_community'])
+		nics_byout = SNMPWALK('.1.3.6.1.2.1.31.1.1.1.10', host['snmp_version'], host['address'], host['snmp_community'])
 	else:
 		return ([],[],[])
 
@@ -193,12 +217,38 @@ def main():
 	parser.add_option("-c", "--configfile", dest="conffile", help="Config file", metavar="INIFILE")
 	parser.add_option('-d', '--daemon', action='store_true', dest='daemon', help='Daemonize, go to background')
 	parser.add_option('-T', '--test', action='store_true', dest='test', help='Test if all hosts are reachable')
+#	parser.add_option("", "--path", dest="path", help="Path to snmpwalk")
+	parser.add_option("", "--nonetsnmp", action="store_true", dest="nonetsnmp", help="Do not use NET-SNMP python bindings")
 	parser.add_option('-v', '--verbose', action='count', dest='verb', help='Verbose output')
 
 	parser.set_defaults(conffile='/etc/rt4pnp/rt4pnp.ini')
+#	parser.set_defaults(path='')
 	parser.set_defaults(verb=0)
 
 	(options, args) = parser.parse_args()
+
+	##### Detect NET-SNMP-Python bindings
+	use_netsnmp = False
+
+	if not options.nonetsnmp:
+		try:
+			import netsnmp
+			use_netsnmp = True
+		except ImportError:
+			pass
+
+	if use_netsnmp:
+		if options.verb >=1:
+			print "Using NET-SNMP Python bindings"
+		SNMPWALK = SNMPWALK_netsnmp
+
+	else:
+		if options.verb >=1:
+			print "Using NET-SNMP command line tools"
+		SNMPWALK = SNMPWALK_cmdline
+
+		if options.verb >=3:
+			print "Using commandline: " + CMDLINE_walk
 
 	# Read config file
 	config = ConfigParser.RawConfigParser()
@@ -236,7 +286,8 @@ def main():
 	if options.test:
 		for host_name in hosts:
 			host = hosts[host_name]
-			sysDescr = netsnmp.snmpget('.1.3.6.1.2.1.1.1.0', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])[0]
+			sysDescr = SNMPWALK('.1.3.6.1.2.1.1.1', host['snmp_version'], host['address'], host['snmp_community'])
+			sysDescr = sysDescr[0]
 			if not sysDescr:
 				print 'CRITICAL: No answer from "%s/%s/%s"'  % (host_name, host['host_name'], host['address'])
 			else:
@@ -262,12 +313,12 @@ def main():
 			if options.verb >= 2:
 				print 'Now have a look at "%s"/"%s"/"%s"' % (host_name, host['host_name'], host['address'])
 
-			nics_idx = snmp_get_idx(host)
+			nics_idx = snmp_get_idx(SNMPWALK, host)
 
 			if not nics_idx:
 				print 'WARNING: Got no information from "%s"/"%s"/"%s"' % (host_name, host['host_name'], host['address'])
 			else:
-				(nics_name, nics_byin, nics_byout) = snmp_get_data(host)
+				(nics_name, nics_byin, nics_byout) = snmp_get_data(SNMPWALK, host)
 				if nics_name:
 					counter_hosts += 1
 
