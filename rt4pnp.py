@@ -1,7 +1,24 @@
 #!/usr/bin/env python
 
-# (c) 2010 by Sven Velt, Teamix GmbH
-#             sv@teamix.de
+#####################################################################
+# (c) 2010 by Sven Velt and team(ix) GmbH, Nuernberg, Germany       #
+#             sv@teamix.net                                         #
+#                                                                   #
+# This file is part of RT4PNP.                                      #
+#                                                                   #
+# RT4PNP is free software: you can redistribute it and/or modify it #
+# under the terms of the GNU General Public License as published by #
+# the Free Software Foundation, either version 2 of the License, or #
+# (at your option) any later version.                               #
+#                                                                   #
+# Foobar is distributed in the hope that it will be useful,         #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of    #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the     #
+# GNU General Public License for more details.                      #
+#                                                                   #
+# You should have received a copy of the GNU General Public License #
+# along with RT4PNP.  If not, see <http://www.gnu.org/licenses/>.   #
+#####################################################################
 
 import ConfigParser
 import netsnmp
@@ -13,7 +30,7 @@ import time
 
 ##############################################################################
 
-PERFDATATEMPL = 'DATATYPE::SERVICEPERFDATA\tTIMET::%(timet)s\tHOSTNAME::%(host_name)s\tSERVICEDESC::%(service_desc)s\tSERVICEPERFDATA::%(service_perfdata)s\tSERVICECHECKCOMMAND::rt4pnp\tHOSTSTATE::UP\tHOSTSTATETYPE::HARD\tSERVICESTATE::OK\tSERVICESTATETYPE::HARD'
+PERFDATATEMPL = 'DATATYPE::SERVICEPERFDATA\tTIMET::%(timet)s\tHOSTNAME::%(host_name)s\tSERVICEDESC::%(service_desc)s\tSERVICEPERFDATA::%(service_perfdata)s\tSERVICECHECKCOMMAND::%(service_checkcommand)s\tHOSTSTATE::UP\tHOSTSTATETYPE::HARD\tSERVICESTATE::OK\tSERVICESTATETYPE::HARD'
 
 ##############################################################################
 
@@ -36,9 +53,6 @@ def read_config_global(config):
 		cfg['pnpspoolpath'] = config.get('global','pnpspoolpath')
 	else:
 		cfg['pnpspoolpath'] = '/var/spool/pnp4nagios/npcd'
-	if not os.access(cfg['pnpspoolpath'],os.W_OK):
-		print 'PNP4Nagios spool path "%s" is not writeable!' % cfg['pnpspoolpath']
-		sys.exit(1)
 
 	if config.has_option('global','interval'):
 		cfg['interval'] = config.getint('global','interval')
@@ -55,6 +69,11 @@ def read_config_global(config):
 	else:
 		cfg['snmp_version'] = normalize_snmp_version(2)
 
+	if config.has_option('global','write_internal_perfdata'):
+		cfg['write_internal_perfdata'] = config.getboolean('global','write_internal_perfdata')
+	else:
+		cfg['write_internal_perfdata'] = True
+
 	return cfg
 
 
@@ -63,8 +82,16 @@ def read_config_sections(config, sections, globalcfg):
 
 	for section in sections:
 		host = {}
-		host['host_name'] = config.get(section, 'host_name')
-		host['address'] = config.get(section, 'address')
+
+		if config.has_option(section, 'host_name'):
+			host['host_name'] = config.get(section, 'host_name')
+		else:
+			host['host_name'] = section
+
+		if config.has_option(section, 'address'):
+			host['address'] = config.get(section, 'address')
+		else:
+			host['address'] = host['host_name']
 
 		if config.has_option(section, 'snmp_version'):
 			host['snmp_version'] = normalize_snmp_version(config.get(section, 'snmp_version'))
@@ -119,7 +146,7 @@ def main():
 	parser.add_option('-v', '--verbose', action='count', dest='verb', help='Verbose output')
 
 	parser.set_defaults(conffile='/etc/rt4pnp/rt4pnp.ini')
-	parser.set_defaults(verb=3)
+	parser.set_defaults(verb=0)
 
 	(options, args) = parser.parse_args()
 
@@ -137,6 +164,11 @@ def main():
 		print 'Reading [global] sections...'
 
 	globalcfg = read_config_global(config)
+
+	if not options.test and not os.access(globalcfg['pnpspoolpath'],os.W_OK):
+		print 'PNP4Nagios spool path "%s" is not writeable!' % globalcfg['pnpspoolpath']
+		sys.exit(1)
+
 	if 'global' in sections:
 		sections.remove('global')
 
@@ -152,8 +184,14 @@ def main():
 
 	# Test if all hosts could be reached
 	if options.test:
-		for host in hosts:
-			print 'FIXME: Test for "%s"' % hosts[host]['host_name']
+		for host_name in hosts:
+			host = hosts[host_name]
+			sysDescr = netsnmp.snmpget('.1.3.6.1.2.1.1.1.0', Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'])[0]
+			if not sysDescr:
+				print 'CRITICAL: No answer from "%s/%s/%s"'  % (host_name, host['host_name'], host['address'])
+			else:
+				print 'OK: "%s/%s/%s":   %s' % (host_name, host['host_name'], host['address'], sysDescr)
+		sys.exit(0)
 
 
 	# Daemonize
@@ -186,6 +224,7 @@ def main():
 				t = {}
 				t['timet'] = int(time.time())
 				t['host_name'] = re.sub('[^a-zA-Z0-9-_\.]', '_', host['host_name'])
+				t['service_checkcommand'] = 'rt4pnp_v%d' % host['snmp_version']
 				for i in xrange(0,len(nics_idx)):
 					t['service_desc'] = 'Port_' + re.sub('[^a-zA-Z0-9-_\.]', '_', nics_name[i].lstrip().rstrip())
 					t['service_perfdata'] = 'bytes_in=' + nics_byin[i] + 'c bytes_out=' + nics_byout[i] + 'c'
@@ -193,14 +232,28 @@ def main():
 					counter_ports += 1
 				del t
 
-		file(os.path.join(globalcfg['pnpspoolpath'], 'rt4pnp-%s' % int(time.time())), 'w').writelines('\n'.join(lines))
-
-		time_end = time.time()
-		duration_run = time_end - time_start
+		# Walked over all hosts, internal stats now
+		duration_run = time.time() - time_start
 		if options.verb >= 2:
 			print 'This round took %.2f seconds, for %s ports on %s hosts' % (duration_run, counter_ports, counter_hosts)
 
-		duration_sleep = globalcfg['interval'] - duration_run
+		if globalcfg['write_internal_perfdata']:
+			t = {}
+			t['timet'] = int(time.time())
+			t['host_name'] = 'rt4pnp-internal'
+			t['service_desc'] = 'runtime informations'
+			t['service_checkcommand'] = 'rt4pnp-internal'
+			t['service_perfdata'] = 'ports=%s;;;0; hosts=%s;;;0;' % (counter_ports, counter_hosts)
+			t['service_perfdata'] += 'runtime=%.3f;;%0.f;0; interval=%.0f;;;0;' % (duration_run, globalcfg['interval'], globalcfg['interval'])
+			lines.append(PERFDATATEMPL % t)
+			del t
+
+		# Write perfdata file
+		# FIXME: Exception handling is missing...
+		file(os.path.join(globalcfg['pnpspoolpath'], 'rt4pnp-%s' % int(time.time())), 'w').writelines('\n'.join(lines))
+
+		# Calculate for sleep
+		duration_sleep = globalcfg['interval'] - (time.time() - time_start)
 		if duration_sleep < 0:
 			print 'ERROR: Round took too long! Duration: %.2f, but interval is set to %.2f!' % (duration_run, globalcfg['interval'])
 		else:
