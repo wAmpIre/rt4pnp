@@ -24,7 +24,7 @@
 #
 $opt[1] = " --vertical-label \"Traffic\" -b 1000 --title \"Interface Traffic for $hostname / $servicedesc\" ";
 
-$ds_name[1] = "Interface Traffic in Bits/sec"
+$ds_name[1] = "Interface Traffic in Bits/sec";
 
 $def[1] = "DEF:bytesin=$RRDFILE[1]:$DS[1]:AVERAGE " ;
 $def[1] .= "DEF:bytesout=$RRDFILE[2]:$DS[2]:AVERAGE " ;
