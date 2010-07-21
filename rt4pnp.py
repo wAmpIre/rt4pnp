@@ -190,7 +190,7 @@ def snmp_get_idx(SNMPWALK, host):
 	return SNMPWALK('.1.3.6.1.2.1.2.2.1.1', host['snmp_version'], host['address'], host['snmp_community'])
 
 
-def snmp_get_data(SNMPWALK, host):
+def snmp_get_data(SNMPWALK, host, required_ports):
 	if host['snmp_version'] == 1:
 
 		nics_name = SNMPWALK('.1.3.6.1.2.1.2.2.1.2', host['snmp_version'], host['address'], host['snmp_community'])
@@ -205,7 +205,7 @@ def snmp_get_data(SNMPWALK, host):
 	else:
 		return ([],[],[])
 
-	if len(nics_name) == len(nics_byin) == len(nics_byout):
+	if required_ports == len(nics_name) == len(nics_byin) == len(nics_byout):
 		return (nics_name, nics_byin, nics_byout)
 	else:
 		return ([],[],[])
@@ -291,11 +291,10 @@ def main():
 		for host_name in hosts:
 			host = hosts[host_name]
 			sysDescr = SNMPWALK('.1.3.6.1.2.1.1.1', host['snmp_version'], host['address'], host['snmp_community'])
-			sysDescr = sysDescr[0]
 			if not sysDescr:
 				print 'CRITICAL: No answer from "%s/%s/%s"'  % (host_name, host['host_name'], host['address'])
 			else:
-				print 'OK: "%s/%s/%s":   %s' % (host_name, host['host_name'], host['address'], sysDescr)
+				print 'OK: "%s/%s/%s":   %s' % (host_name, host['host_name'], host['address'], sysDescr[0])
 		sys.exit(0)
 
 
@@ -322,7 +321,7 @@ def main():
 			if not nics_idx:
 				print 'WARNING: Got no information from "%s"/"%s"/"%s"' % (host_name, host['host_name'], host['address'])
 			else:
-				(nics_name, nics_byin, nics_byout) = snmp_get_data(SNMPWALK, host)
+				(nics_name, nics_byin, nics_byout) = snmp_get_data(SNMPWALK, host, required_ports=len(nics_idx))
 				if nics_name:
 					counter_hosts += 1
 
