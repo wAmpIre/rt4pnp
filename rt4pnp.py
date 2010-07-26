@@ -329,7 +329,7 @@ def main():
 				t['timet'] = int(time.time())
 				t['host_name'] = re.sub('[^a-zA-Z0-9-_\.]', '_', host['host_name'])
 				t['service_checkcommand'] = 'rt4pnp_v%d' % host['snmp_version']
-				for i in xrange(0,len(nics_idx)):
+				for i in xrange(0,len(nics_name)):
 					t['service_desc'] = 'Port_' + re.sub('[^a-zA-Z0-9-_\.]', '_', nics_name[i].lstrip().rstrip())
 					t['service_perfdata'] = 'bytes_in=' + nics_byin[i] + 'c bytes_out=' + nics_byout[i] + 'c'
 					lines.append(PERFDATATEMPL % t)
