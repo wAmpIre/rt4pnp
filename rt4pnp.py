@@ -256,6 +256,7 @@ def main():
 
 	# Read config file
 	config = ConfigParser.RawConfigParser()
+	config.optionxform = str # We need case-sensitive options
 	inis = config.read(options.conffile)
 
 	if not inis:
