@@ -440,7 +440,7 @@ class RT4PNP(object):
 					if counter_ports > 0:
 						counter_hosts += 1
 				else:
-					if self.options.verb >= 3:
+					if self.options.verb >= 1:
 						print 'WHUPS! Lengths do NOT match!'
 
 		# Walked over all hosts, internal stats now
