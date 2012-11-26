@@ -258,7 +258,7 @@ class RT4PNP(object):
 		if config.has_option('global','interval'):
 			cfg['interval'] = config.getint('global','interval')
 		else:
-			cfg['interval'] = 60
+			cfg['interval'] = 120
 
 		if config.has_option('global','snmp_community'):
 			cfg['snmp_community'] = config.get('global','snmp_community')
