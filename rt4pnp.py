@@ -128,9 +128,26 @@ class RT4PNP(object):
 		if type(oids) == str:
 			oids = [oids, ]
 
-		#oids = self.netsnmp.VarList(*oids)
-		self.netsnmp.VarList(*oids)
-		return self.netsnmp.snmpget(Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'], *oids)
+		out = []
+		while len(oids):
+			if host['snmp_max_get_at_once'] == 0:
+				this_oids = oids
+				oids = []
+			else:
+				nr_oids_this_run = min(len(oids), host['snmp_max_get_at_once'])
+				this_oids = oids[0:nr_oids_this_run]
+				oids = oids[nr_oids_this_run:]
+
+			self.netsnmp.VarList(*this_oids)
+			print this_oids
+			out.extend(self.netsnmp.snmpget(Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'], *this_oids))
+			print out
+
+		for line in range(0,len(out)):
+			if out[line] == None:
+				out[line] = '0'
+			out[line] = out[line].rstrip().replace('"','')
+		return out
 
 
 	def SNMPWALK_cmdline(self, host, oid):
@@ -139,6 +156,8 @@ class RT4PNP(object):
 			version = '2c'
 		cmdline = self.CMDLINE_walk_12 % (version, host['snmp_community'], host['address'], oid)
 
+		if self.options.verb >= 4:
+			print 'Running command: %s' % cmdline
 		cmd = os.popen(cmdline)
 
 		out = cmd.readlines()
@@ -159,17 +178,34 @@ class RT4PNP(object):
 		version = host['snmp_version']
 		if version == 2:
 			version = '2c'
-		cmdline = self.CMDLINE_get_12 % (version, host['snmp_community'], host['address'], " ".join(oids))
 
-		cmd = os.popen(cmdline)
+		out = []
+		while len(oids):
+			if host['snmp_max_get_at_once'] == 0:
+				this_oids = oids
+				oids = []
+			else:
+				nr_oids_this_run = min(len(oids), host['snmp_max_get_at_once'])
+				this_oids = oids[0:nr_oids_this_run]
+				oids = oids[nr_oids_this_run:]
 
-		out = cmd.readlines()
-		retcode = cmd.close()
+			cmdline = self.CMDLINE_get_12 % (version, host['snmp_community'], host['address'], " ".join(this_oids))
 
-		if retcode != None:
-			return ()
+			if self.options.verb >= 4:
+				print 'Running command: %s' % cmdline
+			cmd = os.popen(cmdline)
+			this_out = cmd.readlines()
+			retcode = cmd.close()
+			print this_out
+
+			if retcode != None:
+				return ()
+
+			out.extend(this_out)
 
 		for line in range(0,len(out)):
+			if out[line].startswith('No such instance'):
+				out[line] = '0'
 			out[line] = out[line].rstrip().replace('"','')
 		return out
 
@@ -270,6 +306,11 @@ class RT4PNP(object):
 		else:
 			cfg['snmp_version'] = self.normalize_snmp_version(2)
 
+		if config.has_option('global','snmp_max_get_at_once'):
+			cfg['snmp_max_get_at_once'] = config.getint('global','snmp_max_get_at_once')
+		else:
+			cfg['snmp_max_get_at_once'] = 32
+
 		if config.has_option('global','write_internal_perfdata'):
 			cfg['write_internal_perfdata'] = config.getboolean('global','write_internal_perfdata')
 		else:
@@ -312,6 +353,11 @@ class RT4PNP(object):
 				host['snmp_community'] = config.get(section, 'snmp_community')
 			else:
 				host['snmp_community'] = self.cfg_global['snmp_community']
+
+			if config.has_option(section, 'snmp_max_get_at_once'):
+				host['snmp_max_get_at_once'] = config.getint(section, 'snmp_max_get_at_once')
+			else:
+				host['snmp_max_get_at_once'] = self.cfg_global['snmp_max_get_at_once']
 
 			hosts[section] = host
 
