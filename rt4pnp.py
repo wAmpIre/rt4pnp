@@ -140,9 +140,7 @@ class RT4PNP(object):
 				oids = oids[nr_oids_this_run:]
 
 			self.netsnmp.VarList(*this_oids)
-			print this_oids
 			out.extend(self.netsnmp.snmpget(Version=host['snmp_version'], DestHost=host['address'], Community=host['snmp_community'], *this_oids))
-			print out
 
 		for line in range(0,len(out)):
 			if out[line] == None:
@@ -197,7 +195,6 @@ class RT4PNP(object):
 			cmd = os.popen(cmdline)
 			this_out = cmd.readlines()
 			retcode = cmd.close()
-			print this_out
 
 			if retcode != None:
 				return ()
