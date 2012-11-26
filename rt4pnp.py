@@ -41,6 +41,7 @@ class RT4PNP(object):
 			'name': '.1.3.6.1.2.1.2.2.1.2',
 			'byin': '.1.3.6.1.2.1.2.2.1.10',
 			'byout': '.1.3.6.1.2.1.2.2.1.16',
+			'ifname': '.1.3.6.1.2.1.31.1.1.1.1',
 		},
 		{
 			'name': '.1.3.6.1.2.1.31.1.1.1.1',
@@ -354,6 +355,11 @@ class RT4PNP(object):
 			else:
 				host['snmp_community'] = self.cfg_global['snmp_community']
 
+			if config.has_option(section, 'snmpv1_use_ifname'):
+				host['snmpv1_use_ifname'] = config.getboolean(section, 'snmpv1_use_ifname')
+			else:
+				host['snmpv1_use_ifname'] = False
+
 			if config.has_option(section, 'snmp_max_get_at_once'):
 				host['snmp_max_get_at_once'] = config.getint(section, 'snmp_max_get_at_once')
 			else:
@@ -391,7 +397,10 @@ class RT4PNP(object):
 
 
 	def snmp_get_data(self, host, idxs):
-		nics_name = self.SNMPGET(host, ['.'.join([self.OID[host['snmp_version']]['name'],i]) for i in idxs])
+		name_oid = 'name'
+		if host['snmp_version'] == 1 and host['snmpv1_use_ifname']:
+			name_oid = 'ifname'
+		nics_name = self.SNMPGET(host, ['.'.join([self.OID[host['snmp_version']][name_oid],i]) for i in idxs])
 		nics_byin = self.SNMPGET(host, ['.'.join([self.OID[host['snmp_version']]['byin'],i]) for i in idxs])
 		nics_byout = self.SNMPGET(host, ['.'.join([self.OID[host['snmp_version']]['byout'],i]) for i in idxs])
 
