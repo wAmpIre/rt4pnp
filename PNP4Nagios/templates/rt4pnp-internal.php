@@ -47,8 +47,8 @@ $opt[2] = " --vertical-label \"Time\" -b 1000 --title \"Time statistics\" ";
 
 $ds_name[2] = "Time statistics";
 
-$def[2] = "DEF:runtime=$RRDFILE[1]:$DS[3]:MAX ";
-$def[2] .= "DEF:interval=$RRDFILE[1]:$DS[4]:MAX ";
+$def[2] = "DEF:runtime=$RRDFILE[3]:$DS[3]:MAX ";
+$def[2] .= "DEF:interval=$RRDFILE[4]:$DS[4]:MAX ";
 $def[2] .= "AREA:runtime#FFFF00:\" Runtime    \" ";
 $def[2] .= "GPRINT:runtime:LAST:\"%5.2lf sec last,\" ";
 $def[2] .= "GPRINT:runtime:AVERAGE:\"%5.2lf sec avg,\" ";
