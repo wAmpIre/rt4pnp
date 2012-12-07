@@ -77,7 +77,7 @@ class RT4PNP(object):
 		return
 
 
-	def daemonize(pidfile=None, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
+	def daemonize(self, pidfile=None, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
 		try:
 			# 1st fork
 			pid = os.fork()
