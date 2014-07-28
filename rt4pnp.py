@@ -65,11 +65,6 @@ class RT4PNP(object):
 		self.read_cmdline_options()
 		self.read_inifile()
 
-		if self.options.verb >= 3:
-			import pprint
-			pprint.pprint(self.cfg_global)
-			pprint.pprint(self.hosts)
-
 		if self.options.test:
 			self.run_test()
 			sys.exit(0)
